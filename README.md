@@ -92,4 +92,4 @@ List of objects is available here: https://vk.com/dev/objects
 
 ## License
 
-**aiovkcom** is released under an BSD 2-Clause License.
+**aiovkcom** is released under the BSD 2-Clause License.

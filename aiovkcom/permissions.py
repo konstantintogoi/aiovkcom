@@ -1,5 +1,5 @@
 PERMISSIONS = (
-    'notify',
+    # 'notify',  # leads to unsupported access form
     'friends',
     'photos',
     'audio',

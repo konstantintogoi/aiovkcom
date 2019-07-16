@@ -15,9 +15,10 @@ class Session:
 
     CONTENT_TYPE = 'application/json; charset=utf-8'
 
-    __slots__ = ('session', )
+    __slots__ = ('pass_error', 'session')
 
-    def __init__(self, session=None):
+    def __init__(self, pass_error=False, session=None):
+        self.pass_error = pass_error
         self.session = session or aiohttp.ClientSession()
 
     def __await__(self):
@@ -44,8 +45,8 @@ class TokenSession(Session):
 
     __slots__ = ('access_token', 'v')
 
-    def __init__(self, access_token, v='', session=None):
-        super().__init__(session)
+    def __init__(self, access_token, v='', pass_error=False, session=None):
+        super().__init__(pass_error, session)
         self.access_token = access_token
         self.v = v or self.V
 
@@ -71,15 +72,15 @@ class TokenSession(Session):
         params.update(self.required_params)
 
         async with self.session.get(url, params=params) as resp:
-            status = resp.status
-            response = await resp.json(content_type=self.CONTENT_TYPE)
+            content = await resp.json(content_type=self.CONTENT_TYPE)
 
-        if 'response' in response:
-            response = response['response']
-        elif 'error' in response:
-            raise APIError(response['error'])
+        if self.pass_error:
+            response = content
+        elif 'error' in content:
+            log.error(content['error'])
+            raise APIError(content['error'])
         else:
-            raise RuntimeError(status)
+            response = content['response']
 
         return response
 
@@ -89,10 +90,16 @@ class ImplicitSession(TokenSession):
     OAUTH_URL = 'https://oauth.vk.com/authorize'
     REDIRECT_URI = 'https://oauth.vk.com/blank.html'
 
+    GET_AUTH_DIALOG_ERROR_MSG = 'Failed to open authorization dialog.'
+    POST_AUTH_DIALOG_ERROR_MSG = 'Form submission failed.'
+    GET_ACCESS_TOKEN_ERROR_MSG = 'Failed to receive access token.'
+    POST_ACCESS_FORM_ERROR_MSG = 'Failed to process access page.'
+
     __slots__ = ('app_id', 'login', 'passwd', 'scope', 'expires_in')
 
-    def __init__(self, app_id, login, passwd, scope='', v='', session=None):
-        super().__init__('', v, session)
+    def __init__(self, app_id, login, passwd, scope='', v='',
+                 pass_error=False, session=None):
+        super().__init__('', v, pass_error, session)
         self.app_id = app_id
         self.login = login
         self.passwd = passwd
@@ -112,20 +119,20 @@ class ImplicitSession(TokenSession):
 
     async def authorize(self, num_attempts=1, retry_interval=1):
         log.debug(f'getting authorization page.. {self.OAUTH_URL}')
-        url, html = await self._get_auth_page()
+        url, html = await self._get_auth_dialog()
 
         for attempt_num in range(num_attempts):
             if url.path.endswith('authorize') and 'client_id' in url.query:
                 log.debug(f'authorizing.. at {url}')
-                url, html = await self._process_auth_form(html)
+                url, html = await self._post_auth_dialog(html)
 
             if url.path.endswith('authorize') and '__q_hash' in url.query:
                 log.debug(f'giving rights.. at {url}')
-                url, html = await self._process_access_form(html)
+                url, html = await self._post_access_form(html)
 
             if url.path.endswith('blank.html'):
                 log.debug('authorized successfully')
-                await self._get_auth_response()
+                await self._get_access_token()
                 return self
 
             if attempt_num >= num_attempts:
@@ -133,19 +140,21 @@ class ImplicitSession(TokenSession):
                 raise e
 
             await asyncio.sleep(retry_interval)
-            url, html = await self._get_auth_page()
+            url, html = await self._get_auth_dialog()
 
-    async def _get_auth_page(self):
+    async def _get_auth_dialog(self):
         """Return URL and html code of authorization page."""
 
         async with self.session.get(self.OAUTH_URL, params=self.params) as resp:
             if resp.status != 200:
-                raise AuthError('Wrong "app_id" or "scope".')
-            url, html = resp.url, await resp.text()
+                log.error(self.GET_AUTH_DIALOG_ERROR_MSG)
+                raise AuthError(self.GET_AUTH_DIALOG_ERROR_MSG)
+            else:
+                url, html = resp.url, await resp.text()
 
         return url, html
 
-    async def _process_auth_form(self, html):
+    async def _post_auth_dialog(self, html):
         """Submits a form with login and password to get access token.
 
         Args:
@@ -161,18 +170,20 @@ class ImplicitSession(TokenSession):
         parser.feed(html)
         parser.close()
 
-        form_url, form_data = parser.url, parser.inputs
+        form_url, form_data = parser.form
         form_data['email'] = self.login
         form_data['pass'] = self.passwd
 
         async with self.session.post(form_url, data=form_data) as resp:
             if resp.status != 200:
-                raise AuthError('Failed to process authorization form.')
-            url, html = resp.url, await resp.text()
+                log.error(self.POST_AUTH_DIALOG_ERROR_MSG)
+                raise AuthError(self.POST_AUTH_DIALOG_ERROR_MSG)
+            else:
+                url, html = resp.url, await resp.text()
 
         return url, html
 
-    async def _process_access_form(self, html):
+    async def _post_access_form(self, html):
         """Clicks button 'allow' in a page with access form.
 
         Args:
@@ -188,19 +199,25 @@ class ImplicitSession(TokenSession):
         parser.feed(html)
         parser.close()
 
-        form_url, form_data = parser.url, parser.inputs
+        form_url, form_data = parser.form
 
         async with self.session.post(form_url, data=form_data) as resp:
             if resp.status != 200:
-                raise AuthError('Failed to process access page.')
-            url, html = resp.url, await resp.text()
+                log.error(self.POST_ACCESS_FORM_ERROR_MSG)
+                raise AuthError(self.POST_ACCESS_FORM_ERROR_MSG)
+            else:
+                url, html = resp.url, await resp.text()
 
         return url, html
 
-    async def _get_auth_response(self):
+    async def _get_access_token(self):
         async with self.session.get(self.OAUTH_URL, params=self.params) as resp:
-            location = URL(resp.history[-1].headers['Location'])
-            url = URL(f'?{location.fragment}')
+            if resp.status != 200:
+                log.error(self.GET_ACCESS_TOKEN_ERROR_MSG)
+                raise AuthError(self.GET_ACCESS_TOKEN_ERROR_MSG)
+            else:
+                location = URL(resp.history[-1].headers['Location'])
+                url = URL(f'?{location.fragment}')
 
         try:
             self.access_token = url.query['access_token']
