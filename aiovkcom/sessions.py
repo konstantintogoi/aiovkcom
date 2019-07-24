@@ -3,7 +3,7 @@ import asyncio
 import logging
 from yarl import URL
 
-from .exceptions import APIError, AuthError
+from .exceptions import AuthError, VKAuthError, VKAPIError
 from .parsers import AuthPageParser, AccessPageParser
 
 
@@ -78,7 +78,7 @@ class TokenSession(Session):
             response = content
         elif 'error' in content:
             log.error(content['error'])
-            raise APIError(content['error'])
+            raise VKAPIError(content['error'])
         else:
             response = content['response']
 
@@ -118,35 +118,40 @@ class ImplicitSession(TokenSession):
         }
 
     async def authorize(self, num_attempts=1, retry_interval=1):
-        log.debug(f'getting authorization page.. {self.OAUTH_URL}')
-        url, html = await self._get_auth_dialog()
-
         for attempt_num in range(num_attempts):
-            if url.path.endswith('authorize') and 'client_id' in url.query:
+            log.debug(f'getting authorization dialog {self.OAUTH_URL}')
+            url, html = await self._get_auth_dialog()
+
+            if url.path == '/authorize':
                 log.debug(f'authorizing.. at {url}')
                 url, html = await self._post_auth_dialog(html)
 
-            if url.path.endswith('authorize') and '__q_hash' in url.query:
+            if url.path == '/authorize' and '__q_hash' in url.query:
                 log.debug(f'giving rights.. at {url}')
                 url, html = await self._post_access_form(html)
+            elif url.path == '/authorize' and 'email' in url.query:
+                log.error('Invalid login or password.')
+                raise AuthError('Invalid login or password.')
 
-            if url.path.endswith('blank.html'):
+            if url.path == '/blank.html':
                 log.debug('authorized successfully')
                 await self._get_access_token()
                 return self
 
-            if attempt_num >= num_attempts:
-                e = AuthError('Authorization failed.')
-                raise e
-
             await asyncio.sleep(retry_interval)
-            url, html = await self._get_auth_dialog()
+        else:
+            log.debug('Authorization failed.')
+            raise AuthError('Authorization failed.')
 
     async def _get_auth_dialog(self):
         """Return URL and html code of authorization page."""
 
         async with self.session.get(self.OAUTH_URL, params=self.params) as resp:
-            if resp.status != 200:
+            if resp.status == 401:
+                error = await resp.json(content_type=self.CONTENT_TYPE)
+                log.error(error)
+                raise VKAuthError(error)
+            elif resp.status != 200:
                 log.error(self.GET_AUTH_DIALOG_ERROR_MSG)
                 raise AuthError(self.GET_AUTH_DIALOG_ERROR_MSG)
             else:
