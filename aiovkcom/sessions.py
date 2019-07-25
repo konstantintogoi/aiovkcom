@@ -3,7 +3,7 @@ import asyncio
 import logging
 from yarl import URL
 
-from .exceptions import AuthError, VKAuthError, VKAPIError
+from .exceptions import Error, AuthError, VKAuthError, VKAPIError
 from .parsers import AuthPageParser, AccessPageParser
 
 
@@ -131,7 +131,7 @@ class ImplicitSession(TokenSession):
                 url, html = await self._post_access_form(html)
             elif url.path == '/authorize' and 'email' in url.query:
                 log.error('Invalid login or password.')
-                raise AuthError('Invalid login or password.')
+                raise AuthError()
 
             if url.path == '/blank.html':
                 log.debug('authorized successfully')
@@ -141,7 +141,7 @@ class ImplicitSession(TokenSession):
             await asyncio.sleep(retry_interval)
         else:
             log.debug('Authorization failed.')
-            raise AuthError('Authorization failed.')
+            raise Error('Authorization failed.')
 
     async def _get_auth_dialog(self):
         """Return URL and html code of authorization page."""
@@ -153,7 +153,7 @@ class ImplicitSession(TokenSession):
                 raise VKAuthError(error)
             elif resp.status != 200:
                 log.error(self.GET_AUTH_DIALOG_ERROR_MSG)
-                raise AuthError(self.GET_AUTH_DIALOG_ERROR_MSG)
+                raise Error(self.GET_AUTH_DIALOG_ERROR_MSG)
             else:
                 url, html = resp.url, await resp.text()
 
@@ -182,7 +182,7 @@ class ImplicitSession(TokenSession):
         async with self.session.post(form_url, data=form_data) as resp:
             if resp.status != 200:
                 log.error(self.POST_AUTH_DIALOG_ERROR_MSG)
-                raise AuthError(self.POST_AUTH_DIALOG_ERROR_MSG)
+                raise Error(self.POST_AUTH_DIALOG_ERROR_MSG)
             else:
                 url, html = resp.url, await resp.text()
 
@@ -209,7 +209,7 @@ class ImplicitSession(TokenSession):
         async with self.session.post(form_url, data=form_data) as resp:
             if resp.status != 200:
                 log.error(self.POST_ACCESS_FORM_ERROR_MSG)
-                raise AuthError(self.POST_ACCESS_FORM_ERROR_MSG)
+                raise Error(self.POST_ACCESS_FORM_ERROR_MSG)
             else:
                 url, html = resp.url, await resp.text()
 
@@ -219,7 +219,7 @@ class ImplicitSession(TokenSession):
         async with self.session.get(self.OAUTH_URL, params=self.params) as resp:
             if resp.status != 200:
                 log.error(self.GET_ACCESS_TOKEN_ERROR_MSG)
-                raise AuthError(self.GET_ACCESS_TOKEN_ERROR_MSG)
+                raise Error(self.GET_ACCESS_TOKEN_ERROR_MSG)
             else:
                 location = URL(resp.history[-1].headers['Location'])
                 url = URL(f'?{location.fragment}')
@@ -228,4 +228,4 @@ class ImplicitSession(TokenSession):
             self.access_token = url.query['access_token']
             self.expires_in = url.query['expires_in']
         except KeyError as e:
-            raise AuthError(f'"{e.args[0]}" is missing in the auth response.')
+            raise Error(f'"{e.args[0]}" is missing in the auth response.')
