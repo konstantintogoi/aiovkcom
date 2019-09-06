@@ -3,7 +3,14 @@ import asyncio
 import logging
 from yarl import URL
 
-from .exceptions import Error, AuthError, VKAuthError, VKAPIError
+from .exceptions import (
+    Error,
+    OAuthError,
+    VKOAuthError,
+    InvalidGrantError,
+    InvalidUserError,
+    VKAPIError,
+)
 from .parsers import AuthPageParser, AccessPageParser
 
 
@@ -90,10 +97,13 @@ class ImplicitSession(TokenSession):
     OAUTH_URL = 'https://oauth.vk.com/authorize'
     REDIRECT_URI = 'https://oauth.vk.com/blank.html'
 
+    AUTHORIZE_NUM_ATTEMPTS = 1
+    AUTHORIZE_RETRY_INTERVAL = 3
+
     GET_AUTH_DIALOG_ERROR_MSG = 'Failed to open authorization dialog.'
     POST_AUTH_DIALOG_ERROR_MSG = 'Form submission failed.'
     GET_ACCESS_TOKEN_ERROR_MSG = 'Failed to receive access token.'
-    POST_ACCESS_FORM_ERROR_MSG = 'Failed to process access page.'
+    POST_ACCESS_DIALOG_ERROR_MSG = 'Failed to process access dialog.'
 
     __slots__ = ('app_id', 'login', 'passwd', 'scope', 'expires_in')
 
@@ -117,21 +127,28 @@ class ImplicitSession(TokenSession):
             'v': self.v,
         }
 
-    async def authorize(self, num_attempts=1, retry_interval=1):
+    async def authorize(self, num_attempts=None, retry_interval=None):
+        """OAuth Implicit flow."""
+
+        num_attempts = num_attempts or self.AUTHORIZE_NUM_ATTEMPTS
+        retry_interval = retry_interval or self.AUTHORIZE_RETRY_INTERVAL
+
         for attempt_num in range(num_attempts):
             log.debug(f'getting authorization dialog {self.OAUTH_URL}')
             url, html = await self._get_auth_dialog()
 
             if url.path == '/authorize':
-                log.debug(f'authorizing.. at {url}')
+                log.debug(f'authorizing at {url}')
                 url, html = await self._post_auth_dialog(html)
 
             if url.path == '/authorize' and '__q_hash' in url.query:
-                log.debug(f'giving rights.. at {url}')
-                url, html = await self._post_access_form(html)
+                log.debug(f'giving rights at {url}')
+                url, html = await self._post_access_dialog(html)
             elif url.path == '/authorize' and 'email' in url.query:
-                log.error('Invalid login or password.')
-                raise AuthError()
+                log.error(f'Invalid login "{self.login}" or password.')
+                raise InvalidGrantError()
+            elif url.query.get('act') == 'blocked':
+                raise InvalidUserError()
 
             if url.path == '/blank.html':
                 log.debug('authorized successfully')
@@ -140,8 +157,8 @@ class ImplicitSession(TokenSession):
 
             await asyncio.sleep(retry_interval)
         else:
-            log.debug('Authorization failed.')
-            raise Error('Authorization failed.')
+            log.error(f'{num_attempts} login attempts exceeded.')
+            raise OAuthError(f'{num_attempts} login attempts exceeded.')
 
     async def _get_auth_dialog(self):
         """Return URL and html code of authorization page."""
@@ -150,10 +167,10 @@ class ImplicitSession(TokenSession):
             if resp.status == 401:
                 error = await resp.json(content_type=self.CONTENT_TYPE)
                 log.error(error)
-                raise VKAuthError(error)
+                raise VKOAuthError(error)
             elif resp.status != 200:
                 log.error(self.GET_AUTH_DIALOG_ERROR_MSG)
-                raise Error(self.GET_AUTH_DIALOG_ERROR_MSG)
+                raise OAuthError(self.GET_AUTH_DIALOG_ERROR_MSG)
             else:
                 url, html = resp.url, await resp.text()
 
@@ -182,14 +199,14 @@ class ImplicitSession(TokenSession):
         async with self.session.post(form_url, data=form_data) as resp:
             if resp.status != 200:
                 log.error(self.POST_AUTH_DIALOG_ERROR_MSG)
-                raise Error(self.POST_AUTH_DIALOG_ERROR_MSG)
+                raise OAuthError(self.POST_AUTH_DIALOG_ERROR_MSG)
             else:
                 url, html = resp.url, await resp.text()
 
         return url, html
 
-    async def _post_access_form(self, html):
-        """Clicks button 'allow' in a page with access form.
+    async def _post_access_dialog(self, html):
+        """Clicks button 'allow' in a page with access dialog.
 
         Args:
             html (str): html code of the page with access form.
@@ -208,8 +225,8 @@ class ImplicitSession(TokenSession):
 
         async with self.session.post(form_url, data=form_data) as resp:
             if resp.status != 200:
-                log.error(self.POST_ACCESS_FORM_ERROR_MSG)
-                raise Error(self.POST_ACCESS_FORM_ERROR_MSG)
+                log.error(self.POST_ACCESS_DIALOG_ERROR_MSG)
+                raise OAuthError(self.POST_ACCESS_DIALOG_ERROR_MSG)
             else:
                 url, html = resp.url, await resp.text()
 
@@ -219,7 +236,7 @@ class ImplicitSession(TokenSession):
         async with self.session.get(self.OAUTH_URL, params=self.params) as resp:
             if resp.status != 200:
                 log.error(self.GET_ACCESS_TOKEN_ERROR_MSG)
-                raise Error(self.GET_ACCESS_TOKEN_ERROR_MSG)
+                raise OAuthError(self.GET_ACCESS_TOKEN_ERROR_MSG)
             else:
                 location = URL(resp.history[-1].headers['Location'])
                 url = URL(f'?{location.fragment}')
@@ -228,4 +245,4 @@ class ImplicitSession(TokenSession):
             self.access_token = url.query['access_token']
             self.expires_in = url.query['expires_in']
         except KeyError as e:
-            raise Error(f'"{e.args[0]}" is missing in the auth response.')
+            raise OAuthError(f'"{e.args[0]}" is missing in the auth response.')

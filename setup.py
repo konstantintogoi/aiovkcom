@@ -10,7 +10,7 @@ with open(readme_path, encoding='utf-8') as readme_file:
 
 setup(
     name='aiovkcom',
-    version='0.0.4',
+    version='0.0.5',
     author='Konstantin Togoi',
     author_email = 'konstantin.togoi@gmail.com',
     url='https://github.com/KonstantinTogoi/aiovkcom',

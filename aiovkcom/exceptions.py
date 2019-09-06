@@ -12,22 +12,45 @@ class Error(Exception):
         super().__init__(arg)
 
 
-class AuthError(Error):
+class OAuthError(Error):
+    """OAuth error."""
 
-    ERROR = {
-        'error': 'invalid_user_credentials',
-        'error_description': 'invalid login or password',
-    }
+    def __init__(self, error: str):
+        super().__init__({'error': 'oauth_error', 'error_description': error})
+
+
+class VKOAuthError(Error):
+    """Invalid client id."""
+
+    def __init__(self, error: dict):
+        super().__init__(error)
+
+
+class CustomOAuthError(Error):
+    """Custom errors that raised when authorization failed."""
+
+    ERROR = {'error': '', 'error_description': ''}
 
     def __init__(self):
         super().__init__(self.ERROR)
 
 
-class VKAuthError(Error):
-    """Error 401. Invalid 'client_id'."""
+class InvalidGrantError(CustomOAuthError):
+    """Invalid user credentials."""
 
-    def __init__(self, error: dict):
-        super().__init__(error)
+    ERROR = {
+        'error': 'invalid_grant',
+        'error_description': 'invalid login or password',
+    }
+
+
+class InvalidUserError(CustomOAuthError):
+    """Invalid user (blocked)."""
+
+    ERROR = {
+        'error': 'invalid_user',
+        'error_description': 'user is blocked',
+    }
 
 
 class VKAPIError(Error):
