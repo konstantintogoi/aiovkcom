@@ -1,4 +1,10 @@
+"""Exceptions."""
+
+
 class Error(Exception):
+    """Base exception."""
+
+    ERROR = 'internal_error'
 
     @property
     def error(self):
@@ -6,7 +12,7 @@ class Error(Exception):
 
     def __init__(self, error: str or dict):
         arg = error if isinstance(error, dict) else {
-            'error': 'internal_error',
+            'error': self.ERROR,
             'error_description': error,
         }
         super().__init__(arg)
@@ -15,15 +21,7 @@ class Error(Exception):
 class OAuthError(Error):
     """OAuth error."""
 
-    def __init__(self, error: str):
-        super().__init__({'error': 'oauth_error', 'error_description': error})
-
-
-class VKOAuthError(Error):
-    """Invalid client id."""
-
-    def __init__(self, error: dict):
-        super().__init__(error)
+    ERROR = 'oauth_error'
 
 
 class CustomOAuthError(Error):
@@ -53,11 +51,31 @@ class InvalidUserError(CustomOAuthError):
     }
 
 
-class VKAPIError(Error):
+class APIError(Error):
+    """API error."""
+
     def __init__(self, error: dict):
         super().__init__(error)
+        self.code = error['error'].get('error_code')
+        self.msg = error['error'].get('error_msg')
+        self.params = error['error'].get('request_params')
 
     def __str__(self):
-        return (f'Error {self.error["error_code"]}: '
-                f'{self.error["error_msg"]} '
-                f'Parameters: {self.error["request_params"]}')
+        return 'Error {code}: "{msg}". Parameters: {params}.'.format(
+            code=self.code, msg=self.msg, params=self.params
+        )
+
+
+class CustomAPIError(APIError):
+    """Custom API error."""
+
+    ERROR = {'error': {'error_code': 0, 'error_msg': '', 'request_params': {}}}
+
+    def __init__(self):
+        super().__init__(self.ERROR)
+
+
+class EmptyResponseError(CustomAPIError):
+    ERROR = {'error': {
+        'error_code': -1, 'error_msg': 'empty response', 'request_params': {}
+    }}

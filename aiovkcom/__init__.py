@@ -2,10 +2,16 @@ from . import api, exceptions, parsers, sessions
 from .exceptions import (
     Error,
     OAuthError,
-    VKOAuthError,
     InvalidGrantError,
     InvalidUserError,
-    VKAPIError,
+    APIError,
+    EmptyResponseError,
 )
-from .sessions import TokenSession, ImplicitSession
+from .sessions import (
+    TokenSession,
+    CodeSession,
+    ImplicitSession,
+)
 from .api import API
+
+__version__ = '0.1.0'

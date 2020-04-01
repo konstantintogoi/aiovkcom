@@ -1,15 +1,15 @@
 import aiohttp
 import asyncio
 import logging
+
 from yarl import URL
 
 from .exceptions import (
-    Error,
     OAuthError,
-    VKOAuthError,
     InvalidGrantError,
     InvalidUserError,
-    VKAPIError,
+    APIError,
+    EmptyResponseError,
 )
 from .parsers import AuthPageParser, AccessPageParser
 
@@ -21,8 +21,6 @@ class Session:
     """A wrapper around aiohttp.ClientSession."""
 
     CONTENT_TYPE = 'application/json; charset=utf-8'
-
-    __slots__ = ('pass_error', 'session')
 
     def __init__(self, pass_error=False, session=None):
         self.pass_error = pass_error
@@ -47,12 +45,13 @@ class Session:
 class TokenSession(Session):
     """Session for sending authorized requests."""
 
-    URL = 'https://api.vk.com/method/'
+    API_URL = 'https://api.vk.com/method/'
     V = '5.101'
 
     __slots__ = ('access_token', 'v')
 
-    def __init__(self, access_token, v='', pass_error=False, session=None):
+    def __init__(self, access_token, v='',
+                 pass_error=False, session=None, **kwargs):
         super().__init__(pass_error, session)
         self.access_token = access_token
         self.v = v or self.V
@@ -74,7 +73,7 @@ class TokenSession(Session):
 
         """
 
-        url = f'{self.URL}/{method_name}'
+        url = self.API_URL + '/' + method_name
         params = {k: params[k] for k in params if params[k]}
         params.update(self.required_params)
 
@@ -84,12 +83,73 @@ class TokenSession(Session):
         if self.pass_error:
             response = content
         elif 'error' in content:
-            log.error(content['error'])
-            raise VKAPIError(content['error'])
-        else:
+            log.error(content)
+            raise APIError(content)
+        elif content:
             response = content['response']
+        else:
+            raise EmptyResponseError()
 
         return response
+
+
+class CodeSession(TokenSession):
+    """Session with authorization with OAuth 2.0 (Authorization Code Grant).
+
+    The Authorization Code grant is used by confidential and public
+    clients to exchange an authorization code for an access token.
+
+    .. _OAuth 2.0 Authorization Code Grant
+        https://oauth.net/2/grant-types/authorization-code/
+
+    .. _Получение access_token
+        https://vk.com/dev/authcode_flow_user?f=4.%20Получение%20access_token
+
+    """
+
+    OAUTH_URL = 'https://oauth.vk.com/access_token'
+    GET_ACCESS_TOKEN_ERROR_MSG = 'Failed to receive access token.'
+
+    __slots__ = ('app_id', 'code', 'redirect_uri', 'expires_in', 'user_id')
+
+    def __init__(self, app_id, app_secret, code, redirect_uri, v='',
+                 pass_error=False, session=None, **kwargs):
+        super().__init__('', v, pass_error, session, **kwargs)
+        self.app_id = app_id
+        self.app_secret = app_secret
+        self.code = code
+        self.redirect_uri = redirect_uri
+
+    @property
+    def params(self):
+        """Authorization request's parameters."""
+        return {
+            'client_id': self.app_id,
+            'client_secret': self.app_secret,
+            'redirect_uri': self.redirect_uri,
+            'code': self.code,
+        }
+
+    async def authorize(self):
+        """Authorize with OAuth 2.0 (Authorization Code)."""
+
+        async with self.session.get(self.OAUTH_URL, params=self.params) as resp:
+            content = await resp.json(content_type=self.CONTENT_TYPE)
+
+        if 'error' in content:
+            log.error(content)
+            raise OAuthError(content)
+        elif content:
+            try:
+                self.access_token = content['access_token']
+                self.expires_in = content['expires_in']
+                self.user_id = content.get('user_id')
+            except KeyError as e:
+                raise OAuthError('%r is missing in the response' % e.args[0])
+        else:
+            raise OAuthError('got empty authorization response')
+
+        return self
 
 
 class ImplicitSession(TokenSession):
@@ -105,26 +165,33 @@ class ImplicitSession(TokenSession):
     GET_ACCESS_TOKEN_ERROR_MSG = 'Failed to receive access token.'
     POST_ACCESS_DIALOG_ERROR_MSG = 'Failed to process access dialog.'
 
-    __slots__ = ('app_id', 'login', 'passwd', 'scope', 'expires_in')
+    __slots__ = ('app_id', 'login', 'passwd', 'scope',
+                 'redirect_uri', 'state', 'revoke', 'expires_in')
 
-    def __init__(self, app_id, login, passwd, scope='', v='',
-                 pass_error=False, session=None):
-        super().__init__('', v, pass_error, session)
+    def __init__(self, app_id, login, passwd,
+                 scope='', redirect_uri='', state='', revoke=0, v='',
+                 pass_error=False, session=None, **kwargs):
+        super().__init__('', v, pass_error, session, **kwargs)
         self.app_id = app_id
         self.login = login
         self.passwd = passwd
         self.scope = scope
+        self.redirect_uri = redirect_uri or self.REDIRECT_URI
+        self.state = state
+        self.revoke = revoke
 
     @property
     def params(self):
-        """Authorization parameters."""
+        """Authorization request's parameters."""
         return {
-            'display': 'page',
-            'response_type': 'token',
-            'redirect_uri': self.REDIRECT_URI,
             'client_id': self.app_id,
+            'redirect_uri': self.redirect_uri,
+            'display': 'mobile',
             'scope': self.scope,
+            'response_type': 'token',
             'v': self.v,
+            'state': self.state,
+            'revoke': self.revoke,
         }
 
     async def authorize(self, num_attempts=None, retry_interval=None):
@@ -134,18 +201,18 @@ class ImplicitSession(TokenSession):
         retry_interval = retry_interval or self.AUTHORIZE_RETRY_INTERVAL
 
         for attempt_num in range(num_attempts):
-            log.debug(f'getting authorization dialog {self.OAUTH_URL}')
+            log.debug('getting authorization dialog %s' % self.OAUTH_URL)
             url, html = await self._get_auth_dialog()
 
             if url.path == '/authorize':
-                log.debug(f'authorizing at {url}')
+                log.debug('authorizing at %s' % url)
                 url, html = await self._post_auth_dialog(html)
 
             if url.path == '/authorize' and '__q_hash' in url.query:
-                log.debug(f'giving rights at {url}')
+                log.debug('giving rights at %s' % url)
                 url, html = await self._post_access_dialog(html)
             elif url.path == '/authorize' and 'email' in url.query:
-                log.error(f'Invalid login "{self.login}" or password.')
+                log.error('Invalid login "%s" or password.' % self.login)
                 raise InvalidGrantError()
             elif url.query.get('act') == 'blocked':
                 raise InvalidUserError()
@@ -157,8 +224,8 @@ class ImplicitSession(TokenSession):
 
             await asyncio.sleep(retry_interval)
         else:
-            log.error(f'{num_attempts} login attempts exceeded.')
-            raise OAuthError(f'{num_attempts} login attempts exceeded.')
+            log.error('%d login attempts exceeded.' % num_attempts)
+            raise OAuthError('%d login attempts exceeded.' % num_attempts)
 
     async def _get_auth_dialog(self):
         """Return URL and html code of authorization page."""
@@ -167,7 +234,7 @@ class ImplicitSession(TokenSession):
             if resp.status == 401:
                 error = await resp.json(content_type=self.CONTENT_TYPE)
                 log.error(error)
-                raise VKOAuthError(error)
+                raise OAuthError(error)
             elif resp.status != 200:
                 log.error(self.GET_AUTH_DIALOG_ERROR_MSG)
                 raise OAuthError(self.GET_AUTH_DIALOG_ERROR_MSG)
@@ -239,10 +306,10 @@ class ImplicitSession(TokenSession):
                 raise OAuthError(self.GET_ACCESS_TOKEN_ERROR_MSG)
             else:
                 location = URL(resp.history[-1].headers['Location'])
-                url = URL(f'?{location.fragment}')
+                url = URL('?' + location.fragment)
 
         try:
             self.access_token = url.query['access_token']
             self.expires_in = url.query['expires_in']
         except KeyError as e:
-            raise OAuthError(f'"{e.args[0]}" is missing in the auth response.')
+            raise OAuthError('%r is missing in response.' % e.args[0])
