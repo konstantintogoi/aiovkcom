@@ -4,7 +4,8 @@ Authorization
 To authorize with vk.com OAuth 2.0 you need :code:`app_id` (Implicit Grant)
 or :code:`app_id` and :code:`app_secret` (Code Grant).
 
-After authorization you will receive:
+The preferred way to authorize is an :code:`async with` statement.
+After authorization the session will have the following attributes:
 
 * :code:`access_token`
 * :code:`expires_in`

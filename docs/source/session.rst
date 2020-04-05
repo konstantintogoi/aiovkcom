@@ -6,7 +6,7 @@ Request
 
 The session makes **GET** requests when you call methods
 of an :code:`API` instance.
-For example,
+For example, the following code block
 
 .. code-block:: python
 
@@ -16,7 +16,7 @@ For example,
     api = API(session)
     news = await api.newsfeed.get()
 
-is equivalent to the following **GET** request:
+is equivalent to **GET** request:
 
 .. code-block:: shell
 
