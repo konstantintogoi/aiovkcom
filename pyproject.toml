@@ -1,0 +1,79 @@
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aiovkcom"
+version = "1.0.0rc1"
+requires-python = ">= 3.7"
+dependencies = ["httpx"]
+authors = [{name = "Konstantin Togoi", email = "konstantin.togoi@gmail.com"}]
+description = "Python vk.com API wrapper"
+license = {file = "LICENSE"}
+readme = "README.rst"
+keywords = ["vk", "vk api"]
+classifiers=[
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Web Environment",
+    "Framework :: AsyncIO",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Internet",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+[project.urls]
+Home = "https://pypi.org/project/aiovkcom"
+Documentation = "https://konstantintogoi.github.io/aiovkcom"
+Repository = "https://github.com/konstantintogoi/aiovkcom"
+
+[tool.ruff]
+ignore = []
+fixable = ["I", "W"]
+select = [
+    "A",  # flake8-builtins
+    "B",  # flake8-bugbear
+    "D",  # pydocstyle
+    "E",  # pycodestyle errors
+    "F",  # Pyflakes
+    "I",  # isort
+    "N",  # pep8-naming
+    "W",  # pycodestyle warnings
+    "C4",  # flake8-comprehensions
+    "C90",  # mccabe
+    "COM",  # flake8-commas
+]
+extend-select = [
+    "D",  # pydocstyle
+]
+extend-ignore = [
+    # Google docstring conventions
+    "D203",  # No blank lines before class docstring
+    "D213",  # Multi-line docstrings should start at the first line
+    "D406",  # Allow colons after "Args", "Returns"
+    "D407",  # Allow "Args", "Returns"
+]
+
+exclude = [
+    "__pypackages__",
+    "__pycache__",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".git",
+]
+
+line-length = 80
+
+# Allow unused variables when underscore-prefixed.
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+# Assume Python 3.9.
+target-version = "py39"
+
