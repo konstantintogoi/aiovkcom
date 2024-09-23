@@ -2,27 +2,22 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://konstantintogoi.github.io/aiovkcom/</loc>
-         <lastmod>2024-09-15</lastmod>
+         <lastmod>2024-09-23</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://konstantintogoi.github.io/aiovkcom/authorization/</loc>
-         <lastmod>2024-09-15</lastmod>
+         <loc>https://konstantintogoi.github.io/aiovkcom/api/</loc>
+         <lastmod>2024-09-23</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://konstantintogoi.github.io/aiovkcom/getting_started/</loc>
-         <lastmod>2024-09-15</lastmod>
+         <loc>https://konstantintogoi.github.io/aiovkcom/installation/</loc>
+         <lastmod>2024-09-23</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://konstantintogoi.github.io/aiovkcom/rest_api/</loc>
-         <lastmod>2024-09-15</lastmod>
-         <changefreq>daily</changefreq>
-    </url>
-    <url>
-         <loc>https://konstantintogoi.github.io/aiovkcom/session/</loc>
-         <lastmod>2024-09-15</lastmod>
+         <loc>https://konstantintogoi.github.io/aiovkcom/requests/</loc>
+         <lastmod>2024-09-23</lastmod>
          <changefreq>daily</changefreq>
     </url>
 </urlset>

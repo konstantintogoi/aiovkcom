@@ -6,10 +6,9 @@
     :maxdepth: 2
     :caption: Contents:
 
-    getting_started
-    authorization
-    session
-    rest_api
+    installation
+    requests
+    api
 
 Indices and tables
 ==================
