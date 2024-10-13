@@ -7,6 +7,12 @@
 .. image:: https://img.shields.io/pypi/pyversions/aiovkcom.svg
     :target: https://pypi.python.org/pypi/aiovkcom
 
+.. image:: https://readthedocs.org/projects/aiovkcom/badge/?version=latest
+    :target: https://aiovkcom.readthedocs.io/en/latest
+
+.. image:: https://github.com/konstantintogoi/aiovkcom/actions/workflows/pages/pages-build-deployment/badge.svg
+    :target: https://konstantintogoi.github.io/aiovkcom
+
 .. index-start-marker1
 
 aiovkcom

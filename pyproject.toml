@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aiovkcom"
-version = "1.0.0rc1"
+version = "1.0.0"
 requires-python = ">= 3.7"
 dependencies = ["httpx"]
 authors = [{name = "Konstantin Togoi", email = "konstantin.togoi@gmail.com"}]

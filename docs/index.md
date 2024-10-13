@@ -1,6 +1,8 @@
 [![LICENSE](https://img.shields.io/badge/license-BSD-blue.svg)](https://github.com/konstantintogoi/aiovkcom/blob/master/LICENSE)
 [![Latest Release](https://img.shields.io/pypi/v/aiovkcom.svg)](https://pypi.python.org/pypi/aiovkcom)
 [![Supported Python Versions](https://img.shields.io/pypi/pyversions/aiovkcom.svg)](https://pypi.python.org/pypi/aiovkcom)
+[![Read the Docs](https://readthedocs.org/projects/aiovkcom/badge/?version=latest)](https://aiovkcom.readthedocs.io/en/latest)
+[![GitHub Pages](https://github.com/konstantintogoi/aiovkcom/actions/workflows/pages/pages-build-deployment/badge.svg)](https://konstantintogoi.github.io/aiovkcom)
 
 # aiovkcom
 
