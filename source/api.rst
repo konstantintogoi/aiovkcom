@@ -1,7 +1,7 @@
 REST API
 ========
 
-List of all methods is available here: https://vk.com/dev/methods.
+Methods: https://dev.vk.com/en/method.
 
 Executing requests
 ------------------

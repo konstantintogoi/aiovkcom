@@ -7,7 +7,7 @@ Request Format
 --------------
 
 :code:`httpx.AsyncClient` makes **GET** requests according to
-`Request Format <https://vk.com/dev/api_requests>`_.
+`Request Format <https://dev.vk.com/en/api/api-requests>`_.
 For example:
 
 .. code-block:: shell
